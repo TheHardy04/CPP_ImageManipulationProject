@@ -1,7 +1,6 @@
 # ninja log v5
-3	215	7536248628471194	build.ninja	ebd42eb9f1042150
+3	215	7536253406669344	build.ninja	ebd42eb9f1042150
 17	1889	7536226633947530	CMakeFiles/ImageProject.dir/Src/Pixel.cpp.obj	6bd48a360f4b2082
 20	699	7536239910888036	CMakeFiles/ImageProject.dir/Src/main.cpp.obj	4323ca445bd17225
 17	1003	7536232714138081	CMakeFiles/ImageProject.dir/Src/BMPImage.cpp.obj	ee7cb6d7f00300e1
-782	3115	7536239915060344	ImageProject.exe	17d7c97a39940b3a
 11	2228	7536249022414811	ImageProject.exe	e4488bef8cd42024

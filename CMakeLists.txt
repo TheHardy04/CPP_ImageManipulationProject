@@ -14,10 +14,6 @@ include_directories(${SRC_DIR})
 # Copy Images directory to build folder
 file(COPY ${CMAKE_SOURCE_DIR}/Images DESTINATION ${CMAKE_BINARY_DIR})
 
-# Define source and destination paths
-set(SOURCE_IMAGES_DIR ${CMAKE_SOURCE_DIR}/Images)
-set(BINARY_IMAGES_DIR ${CMAKE_BINARY_DIR}/Images)
-
 # Add executable
 add_executable(${PROJECT_NAME} ${SOURCES})
 
@@ -33,10 +29,3 @@ elseif(UNIX)
     target_compile_definitions(${PROJECT_NAME} PRIVATE PLATFORM_LINUX)
 endif()
 
-# Copy the Images folder after the build
-add_custom_command(
-    TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${BINARY_IMAGES_DIR} ${SOURCE_IMAGES_DIR}
-    COMMENT "Copying Images folder from binary to source directory..."
-)

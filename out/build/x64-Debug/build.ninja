@@ -89,7 +89,7 @@ build ImageProject.exe: CXX_EXECUTABLE_LINKER__ImageProject_Debug CMakeFiles\Ima
   LINK_FLAGS = /machine:x64 /debug /INCREMENTAL /subsystem:console
   LINK_LIBRARIES = kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
   OBJECT_DIR = CMakeFiles\ImageProject.dir
-  POST_BUILD = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\theoh\Github\CPP_ImageProject\out\build\x64-Debug && C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -noprofile -executionpolicy Bypass -file C:/Users/theoh/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary C:/Users/theoh/Github/CPP_ImageProject/out/build/x64-Debug/ImageProject.exe -installedDir C:/Users/theoh/vcpkg/installed/x64-windows/debug/bin -OutVariable out && cd /D C:\Users\theoh\Github\CPP_ImageProject\out\build\x64-Debug && "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E copy_directory C:/Users/theoh/Github/CPP_ImageProject/out/build/x64-Debug/Images C:/Users/theoh/Github/CPP_ImageProject/Images"
+  POST_BUILD = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\theoh\Github\CPP_ImageProject\out\build\x64-Debug && C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -noprofile -executionpolicy Bypass -file C:/Users/theoh/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary C:/Users/theoh/Github/CPP_ImageProject/out/build/x64-Debug/ImageProject.exe -installedDir C:/Users/theoh/vcpkg/installed/x64-windows/debug/bin -OutVariable out"
   PRE_LINK = cd .
   TARGET_COMPILE_PDB = CMakeFiles\ImageProject.dir\
   TARGET_FILE = ImageProject.exe
