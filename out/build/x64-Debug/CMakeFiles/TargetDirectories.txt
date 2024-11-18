@@ -1,3 +1,0 @@
-C:/Users/theoh/Github/CPP_ImageProject/out/build/x64-Debug/CMakeFiles/ImageProject.dir
-C:/Users/theoh/Github/CPP_ImageProject/out/build/x64-Debug/CMakeFiles/edit_cache.dir
-C:/Users/theoh/Github/CPP_ImageProject/out/build/x64-Debug/CMakeFiles/rebuild_cache.dir
