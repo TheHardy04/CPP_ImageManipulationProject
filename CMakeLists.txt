@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set source and include directories
-set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
+set(SRC_DIR ${CMAKE_SOURCE_DIR}/Src)
 file(GLOB SOURCES ${SRC_DIR}/*.cpp)
 include_directories(${SRC_DIR})
 
