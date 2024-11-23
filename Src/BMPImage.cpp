@@ -13,7 +13,7 @@
 /// <param name="value"> The value to convert </param>
 /// <returns>Converted value in little-endian or big-endian order</returns>
 template <typename T>
-T ConvertEndian(T value)
+static T ConvertEndian(T value)
 {
 	static_assert(std::is_integral<T>::value, "T must be an integral type."); // check that the value is an integer
 	T result = 0;
@@ -33,12 +33,24 @@ T ConvertEndian(T value)
 /// <param name="bitCount">Color Depth</param>
 BMPImage::BMPImage(uint16_t bitCount)
 {
+	uint32_t info_header_size = BM_INFO_HEADER_SIZE;
+	uint32_t compression = BI_RGB;
+	if (bitCount == DEEP_COLOR_BIT_SIZE)
+	{
+		info_header_size = BM_V4_INFO_HEADER_SIZE;
+		compression = BI_BITFIELDS;
+	}
+	else if (bitCount != TRUE_COLOR_BIT_SIZE)
+	{
+		throw std::invalid_argument("Image Bit Count not handled");
+	}
+
 	_infoHeader = BMPInfoHeader{
-		BM_INFO_HEADER_SIZE, 0, 0, COLOR_PLANES_NUMBER, bitCount, BI_RGB, 0, BM_DEFAULT_RESOLUTION,
+		info_header_size, 0, 0, COLOR_PLANES_NUMBER, bitCount, compression, 0, BM_DEFAULT_RESOLUTION,
 		BM_DEFAULT_RESOLUTION, 0, 0
 	};
 	_fileHeader = BMPFileHeader{
-		BM_SIGNATURE, BM_FILE_HEADER_SIZE + BM_INFO_HEADER_SIZE, 0, 0, BM_FILE_HEADER_SIZE + BM_INFO_HEADER_SIZE
+		BM_SIGNATURE, BM_FILE_HEADER_SIZE + info_header_size, 0, 0, BM_FILE_HEADER_SIZE + info_header_size
 	};
 
 
@@ -50,15 +62,10 @@ BMPImage::BMPImage(uint16_t bitCount)
 /// <param name="width"></param>
 /// <param name="height"></param>
 /// <param name="bitCount">Color Depth</param>
-BMPImage::BMPImage(int32_t width, int32_t height, uint16_t bitCount)
+BMPImage::BMPImage(int32_t width, int32_t height, uint16_t bitCount) : BMPImage(bitCount)
 {
-	_infoHeader = BMPInfoHeader{
-		BM_INFO_HEADER_SIZE, width, height, COLOR_PLANES_NUMBER, bitCount, BI_RGB, 0, BM_DEFAULT_RESOLUTION,
-		BM_DEFAULT_RESOLUTION, 0, 0
-	};
-	_fileHeader = BMPFileHeader{
-		BM_SIGNATURE, BM_FILE_HEADER_SIZE + BM_INFO_HEADER_SIZE, 0, 0, BM_FILE_HEADER_SIZE + BM_INFO_HEADER_SIZE
-	};
+	_infoHeader.width = width;
+	_infoHeader.height = height;
 	_updateHeaders();
 	_pixelData.resize(width * height);
 }
@@ -185,6 +192,38 @@ void BMPImage::_writeHeaders(std::ofstream& file) const
 	file.write(reinterpret_cast<const char*>(&_infoHeader.yPixelsPerMeter), sizeof(_infoHeader.yPixelsPerMeter));
 	file.write(reinterpret_cast<const char*>(&_infoHeader.colorsUsed), sizeof(_infoHeader.colorsUsed));
 	file.write(reinterpret_cast<const char*>(&_infoHeader.colorsImportant), sizeof(_infoHeader.colorsImportant));
+
+	// adding the color masks and color space type for deep color images
+	if (_infoHeader.bitCount == DEEP_COLOR_BIT_SIZE)
+	{
+		uint32_t redMask = RED_CHANNEL_BIT_MASK;
+		uint32_t greenMask = GREEN_CHANNEL_BIT_MASK;
+		uint32_t blueMask = BLUE_CHANNEL_BIT_MASK;
+		uint32_t alphaMask = ALPHA_CHANNEL_BIT_MASK;
+		file.write(reinterpret_cast<const char*>(&redMask), sizeof(redMask));
+		file.write(reinterpret_cast<const char*>(&greenMask), sizeof(greenMask));
+		file.write(reinterpret_cast<const char*>(&blueMask), sizeof(blueMask));
+		file.write(reinterpret_cast<const char*>(&alphaMask), sizeof(alphaMask));
+
+		std::string colorSpace = "Win ";  // See https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/eb4bbd50-b3ce-4917-895c-be31f214797f
+        file.write(colorSpace.c_str(), colorSpace.size());
+
+		// See https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-ciexyztriple
+		uint32_t redEndPoints[3] = { 0, 0, 0 };
+		uint32_t greenEndPoints[3] = { 0, 0, 0 };
+		uint32_t blueEndPoints[3] = { 0, 0, 0 };
+		file.write(reinterpret_cast<const char*>(redEndPoints), sizeof(redEndPoints));
+		file.write(reinterpret_cast<const char*>(greenEndPoints), sizeof(greenEndPoints));
+		file.write(reinterpret_cast<const char*>(blueEndPoints), sizeof(blueEndPoints));
+
+		uint32_t redGamma = 0;
+		uint32_t greenGamma = 0;
+		uint32_t blueGamma = 0;
+		file.write(reinterpret_cast<const char*>(&redGamma), sizeof(redGamma));
+		file.write(reinterpret_cast<const char*>(&greenGamma), sizeof(greenGamma));
+		file.write(reinterpret_cast<const char*>(&blueGamma), sizeof(blueGamma));
+
+	}
 }
 
 void BMPImage::_writePixels(std::ofstream& file) const
@@ -216,9 +255,10 @@ void BMPImage::_writePixels(std::ofstream& file) const
 
 void BMPImage::_updateHeaders()
 {
+	uint32_t headerSize = (_infoHeader.bitCount == DEEP_COLOR_BIT_SIZE) ? BM_V4_INFO_HEADER_SIZE : BM_INFO_HEADER_SIZE;
 	_infoHeader.sizeImage = _infoHeader.width * _infoHeader.height * _getByteCount();
-	_fileHeader.fileSize = BM_FILE_HEADER_SIZE + BM_INFO_HEADER_SIZE + _infoHeader.sizeImage;
-	_fileHeader.offsetData = BM_FILE_HEADER_SIZE + BM_INFO_HEADER_SIZE;
+	_fileHeader.fileSize = BM_FILE_HEADER_SIZE + headerSize + _infoHeader.sizeImage;
+	_fileHeader.offsetData = BM_FILE_HEADER_SIZE + headerSize;
 }
 
 void BMPImage::_resizePixelsData(int32_t newWidth, int32_t newHeight)

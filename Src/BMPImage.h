@@ -3,6 +3,7 @@
 #include "Pixel.h"
 
 // All of this information is based on the BMP file format : https://en.wikipedia.org/wiki/BMP_file_format
+// And for the 32bpp format  : https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapv4heade
 class BMPImage
 {
 	// BMP file header(14 bytes)
@@ -47,11 +48,21 @@ public:
 
 	// Constants
 	static constexpr uint16_t BM_SIGNATURE = 0x4D42;
+
 	static constexpr uint32_t BM_FILE_HEADER_SIZE = 14;
 	static constexpr uint32_t BM_INFO_HEADER_SIZE = 40;
+	static constexpr uint32_t BM_V4_INFO_HEADER_SIZE = 108;
+
 	static constexpr uint16_t COLOR_PLANES_NUMBER = 1;
 	static constexpr uint32_t BI_RGB = 0;
+	static constexpr uint32_t BI_BITFIELDS = 3;
+
 	static constexpr int32_t BM_DEFAULT_RESOLUTION = 1;
+
+	static constexpr uint32_t RED_CHANNEL_BIT_MASK = 0x00FF0000;
+	static constexpr uint32_t GREEN_CHANNEL_BIT_MASK = 0x0000FF00;
+	static constexpr uint32_t BLUE_CHANNEL_BIT_MASK = 0x000000FF;
+	static constexpr uint32_t ALPHA_CHANNEL_BIT_MASK = 0xFF000000;
 
 	static constexpr uint16_t DEEP_COLOR_BIT_SIZE = 32;
 	static constexpr uint16_t TRUE_COLOR_BIT_SIZE = 24;
