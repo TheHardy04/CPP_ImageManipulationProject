@@ -1,14 +1,18 @@
 #include "BMPImage.h"
 #include "Pixel.h"
 #include <iostream>
+#include <vector>
 
 // Cross-platform terminal handling
 #ifdef _WIN32
 #include <conio.h>  // For _getch() on Windows
 #define CLEAR_SCREEN "cls"
+#include <windows.h>
 #else
 #include <termios.h>
 #include <unistd.h>
+#include <filesystem>
+namespace fs = std::filesystem;
 #define CLEAR_SCREEN "clear"
 #endif
 
@@ -127,14 +131,81 @@ namespace
 		std::cin.get();
 	}
 
+    std::vector<std::string> getFilesInDirectory(const std::string& directoryPath, std::string extension = "") {
+        std::vector<std::string> fileNames;
+		if (extension[0] == '.' && extension.size() > 1)
+		{
+			extension = extension.substr(1);
+		}
+
+    #ifdef _WIN32
+        // Windows-specific implementation
+        WIN32_FIND_DATA findFileData;
+        HANDLE hFind = FindFirstFile((directoryPath + "\\*" + extension).c_str(), &findFileData);
+
+        if (hFind == INVALID_HANDLE_VALUE) {
+            std::cerr << "Error opening directory: " << directoryPath << std::endl;
+            return fileNames;
+        }
+
+        do {
+            const std::string fileName = findFileData.cFileName;
+            if (fileName != "." && fileName != "..") {
+                fileNames.push_back(fileName);
+            }
+        } while (FindNextFile(hFind, &findFileData) != 0);
+
+        FindClose(hFind);
+
+    #else
+        // Linux/macOS implementation using C++17 filesystem
+        try {
+            for (const auto& entry : fs::directory_iterator(directoryPath)) {
+                if (entry.is_regular_file() && entry.path().extension() == "." + extension) {  // Only add regular files with the specified extension
+                    fileNames.push_back(entry.path().filename().string());
+                }
+            }
+        }
+        catch (const fs::filesystem_error& e) {
+            std::cerr << "Error accessing directory: " << e.what() << std::endl;
+        }
+    #endif
+
+        return fileNames;
+    }
+
+
     BMPImage openImage()
 	{
+		// File selection menu
         std::string filename;
-        std::cout << "Enter the filename: ";
-        std::cin >> filename;
+        std::string path = "Images";
+
+        std::vector<std::string> fileOptions = {"File to open"};
+		std::vector<std::string> files = getFilesInDirectory(path, ".bmp");
+		fileOptions.insert(fileOptions.end(), files.begin(), files.end());
+        fileOptions.push_back("Demo Images");
+		int choice = selectOption(fileOptions);
+		if (choice == fileOptions.size() - 1)
+		{
+            path += "/DemoImages";
+			std::vector<std::string> demoImages = {
+				"File to open"
+			};
+			std::vector<std::string> demoFiles = getFilesInDirectory(path,".bmp");
+			demoImages.insert(demoImages.end(), demoFiles.begin(), demoFiles.end());
+			int demoChoice = selectOption(demoImages);
+			filename = path + "/" +demoImages[demoChoice];
+		}
+		else
+		{
+			filename = path + "/" + fileOptions[choice];
+		}
+		std::cout << "Opening " << filename << "...\n";
         BMPImage image(filename.c_str());
         return image;
 	}
+
     void exitProgram()
 	{
 		std::cout << "Exiting program...\n";
@@ -143,12 +214,14 @@ namespace
 
 	void save(const BMPImage& image)
 	{
-		std::string filename;
-		std::cout << "Enter the filename: ";
-		std::cin >> filename;
+        std::string filename;
+        std::cout << "Enter the filename: ";
+        std::cin >> filename;
+        filename = "Images/" + filename;
 		image.save(filename.c_str());
 		std::cout << "Image saved successfully\n";
 	}
+
 
 	void manipulate_image(BMPImage& image)
 	{
@@ -195,7 +268,7 @@ namespace
                         "No",
                     };
                     int saveChoice = selectOption(saveOptions);
-                    if (saveChoice == 0)
+                    if (saveChoice == 1)
                     {
                         save(image);
                     }
@@ -204,52 +277,32 @@ namespace
 			}
         }
 	}
+
+	BMPImage generateImage()
+	{
+		int width, height;
+		std::cout << "Enter the width: \n";
+		std::cin >> width;
+		std::cout << "Enter the height: \n";
+		std::cin >> height;
+        std::vector<std::string> options = {
+            "Choose an option",
+            "Do nothing",
+            "Fractal"
+        };
+		int choice = selectOption(options);
+		BMPImage image(width, height);
+
+		if (choice == 2)
+		{
+            image = BMPImage::Fractal::mandelbrot(width,height,150);
+		}
+		return image;
+	}
 }
 
 
 int main() {
-	/*std::cout << "Image from File :" << std::endl;
-	BMPImage image("Images/bmp_24.bmp");
-	std::cout << image << std::endl;
-	image.resize(100,200);
-	image.multiplySize(-0.5);
-	std::cout << image << std::endl;
-	image.save("Images/reverse_bmp_24_v2");
-
-
-	std::cout << std::endl;
-
-
-	std::cout << "======================================" << std::endl;
-	std::cout << "New Image :" << std::endl;
-	BMPImage newImage(2,2);
-	std::cout << newImage << std::endl;
-	newImage.setPixel(0, 0, 255, 255, 255);
-	newImage.setPixel(0, 1, 255, 0, 0);
-	newImage.setPixel(1, 0, 0, 255, 0);
-	newImage.setPixel(1, 1, 0, 0, 255);
-	newImage.setResolution(30000, 30000);
-	newImage.save("Images/100_100_image");
-	std::cout << std::endl;
-
-	std::cout << "======================================" << std::endl;
-	std::cout << "Deep Color Image :" << std::endl;
-	BMPImage deepImage(BMPImage::DEEP_COLOR_BIT_SIZE);
-	deepImage.resize(2, 2);
-	std::cout << deepImage << std::endl;
-	deepImage.setPixel(0, 0, 255, 255, 255, 100);
-	deepImage.setPixel(0, 1, 255, 0, 0, 100);
-	deepImage.setPixel(1, 0, 0, 255, 0, 255);
-	deepImage.setPixel(1, 1, 0, 0, 255, 255);
-	deepImage.multiplySize(50);
-	std::cout << deepImage << std::endl;
-
-	deepImage.multiplySize(0.5);
-	std::cout << deepImage << std::endl;
-
-	deepImage.save("Images/deep_image");
-	std::cout << std::endl;*/
-
 	displayLogo();
     waitForKey();
 
@@ -269,7 +322,8 @@ int main() {
             manipulate_image(currentImage);
         }
         else if (choice == 2) {
-            
+			currentImage = generateImage();
+			manipulate_image(currentImage);
         }
         else if (choice == 3) {
             exitProgram();

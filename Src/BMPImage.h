@@ -2,10 +2,14 @@
 #include <vector>
 #include "Pixel.h"
 
+
+
 // All of this information is based on the BMP file format : https://en.wikipedia.org/wiki/BMP_file_format
 // And for the 32bpp format  : https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapv4heade
 class BMPImage
 {
+	
+#pragma pack(push, 1)  // avoid padding
 	// BMP file header(14 bytes)
 	struct BMPFileHeader {
 		uint16_t fileType;		 // File type always BM
@@ -13,7 +17,7 @@ class BMPImage
 		uint16_t reserved1;      // Reserved, must be 0
 		uint16_t reserved2;      // Reserved, must be 0
 		uint32_t offsetData;     // Start position of pixel data (bytes from the beginning of the file)
-	};
+	}_fileHeader;
 
 	// BMP info header(40 bytes)
 	struct BMPInfoHeader {
@@ -28,13 +32,37 @@ class BMPImage
 		int32_t yPixelsPerMeter;	// Vertical resolution
 		uint32_t colorsUsed;		// No. of colors in the color palette
 		uint32_t colorsImportant;	// No. of important colors
-	};
+	}_infoHeader;
 
-	BMPFileHeader _fileHeader;		// File header
-	BMPInfoHeader _infoHeader;		// Info header
+	// BMP V4 info header(108 bytes)
+	// See https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapv4header
+
+    struct BMPV4InfoHeader : BMPInfoHeader {
+        uint32_t redMask;             // Mask identifying bits of red component
+        uint32_t greenMask;           // Mask identifying bits of green component
+        uint32_t blueMask;            // Mask identifying bits of blue component
+        uint32_t alphaMask;           // Mask identifying bits of alpha component
+        std::string csType;           // Color space type
+        int32_t redX;                 // X coordinate of red endpoint
+        int32_t redY;                 // Y coordinate of red endpoint
+        int32_t redZ;                 // Z coordinate of red endpoint
+        int32_t greenX;               // X coordinate of green endpoint
+        int32_t greenY;               // Y coordinate of green endpoint
+        int32_t greenZ;               // Z coordinate of green endpoint
+        int32_t blueX;                // X coordinate of blue endpoint
+        int32_t blueY;                // Y coordinate of blue endpoint
+        int32_t blueZ;                // Z coordinate of blue endpoint
+        uint32_t gammaRed;            // Gamma red coordinate scale value
+        uint32_t gammaGreen;          // Gamma green coordinate scale value
+        uint32_t gammaBlue;           // Gamma blue coordinate scale value
+    }_v4InfoHeader;
+#pragma pack(pop)
+	BMPInfoHeader& _activeHeader = _infoHeader;
 
 	std::vector<Pixel> _pixelData;	// 2D vector to store pixels
-	
+
+	bool _isTrueColor() const;
+	bool _isDeepColor() const;
 	uint16_t _getByteCount() const;				
 	void _readHeaders(std::ifstream& file);
 	void _readPixels(std::ifstream& file);
@@ -52,6 +80,7 @@ public:
 	static constexpr uint32_t BM_FILE_HEADER_SIZE = 14;
 	static constexpr uint32_t BM_INFO_HEADER_SIZE = 40;
 	static constexpr uint32_t BM_V4_INFO_HEADER_SIZE = 108;
+	static constexpr uint32_t BM_V5_INFO_HEADER_SIZE = 124;
 
 	static constexpr uint16_t COLOR_PLANES_NUMBER = 1;
 	static constexpr uint32_t BI_RGB = 0;
@@ -63,6 +92,7 @@ public:
 	static constexpr uint32_t GREEN_CHANNEL_BIT_MASK = 0x0000FF00;
 	static constexpr uint32_t BLUE_CHANNEL_BIT_MASK = 0x000000FF;
 	static constexpr uint32_t ALPHA_CHANNEL_BIT_MASK = 0xFF000000;
+    static constexpr const char* LCS_WINDOWS_COLOR_SPACE = "Win ";
 
 	static constexpr uint16_t DEEP_COLOR_BIT_SIZE = 32;
 	static constexpr uint16_t TRUE_COLOR_BIT_SIZE = 24;
@@ -72,7 +102,9 @@ public:
 	BMPImage(uint16_t bitCount = TRUE_COLOR_BIT_SIZE);
 	BMPImage(int32_t width, int32_t height, uint16_t bitCount = TRUE_COLOR_BIT_SIZE);
 	BMPImage(const char* filename);
+	BMPImage(const BMPImage& other);
 	~BMPImage();
+	BMPImage& operator=(const BMPImage& other);
 
 	static void openImage(const std::string& filename);
 
@@ -90,6 +122,11 @@ public:
 	void setResolution(int32_t xPixelsPerMeter, int32_t yPixelsPerMeter);
 	void setResolution(int32_t resolution);
 	void multiplySize(float factor);
+	class Fractal
+	{
+	public:
+		static BMPImage mandelbrot(int32_t width, int32_t height, int16_t iterations);
+	};
  
 
 

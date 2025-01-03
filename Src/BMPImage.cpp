@@ -4,7 +4,6 @@
 #include <memory>
 #include <cstdlib>
 
-
 #include "BMPImage.h"
 
 // <summary>
@@ -33,27 +32,41 @@ static T ConvertEndian(T value)
 /// <param name="bitCount">Color Depth</param>
 BMPImage::BMPImage(uint16_t bitCount)
 {
-	uint32_t info_header_size = BM_INFO_HEADER_SIZE;
-	uint32_t compression = BI_RGB;
-	if (bitCount == DEEP_COLOR_BIT_SIZE)
-	{
-		info_header_size = BM_V4_INFO_HEADER_SIZE;
-		compression = BI_BITFIELDS;
-	}
-	else if (bitCount != TRUE_COLOR_BIT_SIZE)
-	{
-		throw std::invalid_argument("Image Bit Count not handled");
-	}
-
+	uint32_t info_header_size= 0;
+	uint32_t compression = 0 ;
 	_infoHeader = BMPInfoHeader{
 		info_header_size, 0, 0, COLOR_PLANES_NUMBER, bitCount, compression, 0, BM_DEFAULT_RESOLUTION,
 		BM_DEFAULT_RESOLUTION, 0, 0
 	};
+	_v4InfoHeader = BMPV4InfoHeader{
+			info_header_size, 0, 0, COLOR_PLANES_NUMBER, bitCount, compression, 0, BM_DEFAULT_RESOLUTION,
+			BM_DEFAULT_RESOLUTION, 0, 0, RED_CHANNEL_BIT_MASK, GREEN_CHANNEL_BIT_MASK,
+			BLUE_CHANNEL_BIT_MASK, ALPHA_CHANNEL_BIT_MASK, LCS_WINDOWS_COLOR_SPACE, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	};
+
+	if (bitCount == TRUE_COLOR_BIT_SIZE)
+	{
+		_activeHeader = _infoHeader;
+		info_header_size = BM_INFO_HEADER_SIZE;
+		compression = BI_RGB;
+		
+	}
+	else if (bitCount == DEEP_COLOR_BIT_SIZE)
+	{
+		_activeHeader = _v4InfoHeader;
+		info_header_size = BM_V4_INFO_HEADER_SIZE;
+		compression = BI_BITFIELDS;
+	}
+	else
+	{
+		throw std::invalid_argument("Image Bit Count not handled");
+	}
+	_activeHeader.size = info_header_size;
+	_activeHeader.compression = compression;
 	_fileHeader = BMPFileHeader{
 		BM_SIGNATURE, BM_FILE_HEADER_SIZE + info_header_size, 0, 0, BM_FILE_HEADER_SIZE + info_header_size
 	};
-
-
 }
 
 /// <summary>
@@ -64,8 +77,8 @@ BMPImage::BMPImage(uint16_t bitCount)
 /// <param name="bitCount">Color Depth</param>
 BMPImage::BMPImage(int32_t width, int32_t height, uint16_t bitCount) : BMPImage(bitCount)
 {
-	_infoHeader.width = width;
-	_infoHeader.height = height;
+	_activeHeader.width = width;
+	_activeHeader.height = height;
 	_updateHeaders();
 	_pixelData.resize(width * height);
 }
@@ -80,19 +93,57 @@ BMPImage::BMPImage(const char* filename)
 }
 
 /// <summary>
+/// load an image from another image object
+/// </summary>
+/// <param name="other"></param>
+BMPImage::BMPImage(const BMPImage& other)
+{
+	_fileHeader = other._fileHeader;
+	_infoHeader = other._infoHeader;
+	_v4InfoHeader = other._v4InfoHeader;
+	_activeHeader = other._activeHeader;
+	_pixelData = other._pixelData;
+}
+
+/// <summary>
 /// Destroy the image object
 /// </summary>
 BMPImage::~BMPImage() = default;
 
+
+BMPImage& BMPImage::operator=(const BMPImage& other) {
+	if (this == &other) {
+		return *this; 
+	}
+	_fileHeader = other._fileHeader;
+	_infoHeader = other._infoHeader;
+	_v4InfoHeader = other._v4InfoHeader;
+	_activeHeader = other._activeHeader;
+	_pixelData = other._pixelData;
+
+	return *this;
+}
+
+bool BMPImage::_isTrueColor() const
+{
+	return _activeHeader.bitCount == TRUE_COLOR_BIT_SIZE;
+}
+
+bool BMPImage::_isDeepColor() const
+{
+	return _activeHeader.bitCount == DEEP_COLOR_BIT_SIZE;
+}
+
 uint16_t BMPImage::_getByteCount() const
 {
-	if (_infoHeader.bitCount == DEEP_COLOR_BIT_SIZE)
+	
+	if (_activeHeader.bitCount == DEEP_COLOR_BIT_SIZE)
 		return 4;
-	if (_infoHeader.bitCount == TRUE_COLOR_BIT_SIZE)
+	if (_activeHeader.bitCount == TRUE_COLOR_BIT_SIZE)
 		return 3;
-	if (_infoHeader.bitCount == GRAY_SCALE_BIT_SIZE)
+	if (_activeHeader.bitCount == GRAY_SCALE_BIT_SIZE)
 		return 4;
-	if (_infoHeader.bitCount == MONOCHROME_BIT_SIZE)
+	if (_activeHeader.bitCount == MONOCHROME_BIT_SIZE)
 		return 1;
 	throw std::runtime_error("Invalid bit count");
 }
@@ -100,67 +151,54 @@ uint16_t BMPImage::_getByteCount() const
 void BMPImage::_readHeaders(std::ifstream& file)
 {
 	// Read the file header
-	// Read the file type
-	file.read(reinterpret_cast<char*>(&_fileHeader.fileType), sizeof(_fileHeader.fileType));
-
+	file.read(reinterpret_cast<char*>(&_fileHeader), sizeof(_fileHeader));
 	// Check if it's a BMP file by looking for the "BM" signature
 	if (_fileHeader.fileType != BM_SIGNATURE)
 	{
 		throw std::runtime_error("File is not a BMP file.");
 	}
-
-	// Read the file size
-	file.read(reinterpret_cast<char*>(&_fileHeader.fileSize), sizeof(_fileHeader.fileSize));
-	// Read the reserved fields
-	file.read(reinterpret_cast<char*>(&_fileHeader.reserved1), sizeof(_fileHeader.reserved1));
-	file.read(reinterpret_cast<char*>(&_fileHeader.reserved2), sizeof(_fileHeader.reserved2));
-	// Read the offset to the pixel data
-	file.read(reinterpret_cast<char*>(&_fileHeader.offsetData), sizeof(_fileHeader.offsetData));
-
 	// Read the info header
-	// Read the size of the info header
-	file.read(reinterpret_cast<char*>(&_infoHeader.size), sizeof(_infoHeader.size));
-	// Read the width and height of the image
-	file.read(reinterpret_cast<char*>(&_infoHeader.width), sizeof(_infoHeader.width));
-	file.read(reinterpret_cast<char*>(&_infoHeader.height), sizeof(_infoHeader.height));
-	// Read the number of color planes
-	file.read(reinterpret_cast<char*>(&_infoHeader.planes), sizeof(_infoHeader.planes));
-	// Read the number of bits per pixel
-	file.read(reinterpret_cast<char*>(&_infoHeader.bitCount), sizeof(_infoHeader.bitCount));
-	// Read the compression method
-	file.read(reinterpret_cast<char*>(&_infoHeader.compression), sizeof(_infoHeader.compression));
-	// Read the size of the raw bitmap data
-	file.read(reinterpret_cast<char*>(&_infoHeader.sizeImage), sizeof(_infoHeader.sizeImage));
-	// Read the horizontal and vertical resolution
-	file.read(reinterpret_cast<char*>(&_infoHeader.xPixelsPerMeter), sizeof(_infoHeader.xPixelsPerMeter));
-	file.read(reinterpret_cast<char*>(&_infoHeader.yPixelsPerMeter), sizeof(_infoHeader.yPixelsPerMeter));
-	// Read the number of colors in the color palette
-	file.read(reinterpret_cast<char*>(&_infoHeader.colorsUsed), sizeof(_infoHeader.colorsUsed));
-	// Read the number of important colors
-	file.read(reinterpret_cast<char*>(&_infoHeader.colorsImportant), sizeof(_infoHeader.colorsImportant));
-
-	// Check if the image is uncompressed
-	if (_infoHeader.compression != BI_RGB)
+	if (_fileHeader.offsetData == BM_INFO_HEADER_SIZE + BM_FILE_HEADER_SIZE)
 	{
-		throw std::runtime_error("Image is compressed.");
+		file.read(reinterpret_cast<char*>(&_infoHeader), sizeof(_infoHeader));
+		// Check if the image is uncompressed
+		if (_infoHeader.compression != BI_RGB)
+		{
+			throw std::runtime_error("Image is compressed. This is not handled by the program");
+		}
+		// Check if the image bit count is valid
+		if (_infoHeader.bitCount != TRUE_COLOR_BIT_SIZE)
+		{
+			throw std::runtime_error("Image bit count is not valid.");
+		}
+		_activeHeader = _infoHeader;
+
 	}
-
-	// Check if the image bit count is valid
-	if (_infoHeader.bitCount != TRUE_COLOR_BIT_SIZE && _infoHeader.bitCount != DEEP_COLOR_BIT_SIZE)
+	// Read the V4 info header
+	else if (_fileHeader.offsetData == BM_V4_INFO_HEADER_SIZE + BM_FILE_HEADER_SIZE)
 	{
-		throw std::runtime_error("Image bit count is not valid.");
+		file.read(reinterpret_cast<char*>(&_v4InfoHeader), sizeof(_v4InfoHeader));
+		// Check if the image is uncompressed
+		if (_v4InfoHeader.compression != BI_BITFIELDS)
+		{
+			throw std::runtime_error("Image is compressed. This is not handled by the program");
+		}
+		// Check if the image bit count is valid
+		if (_v4InfoHeader.bitCount != DEEP_COLOR_BIT_SIZE)
+		{
+			throw std::runtime_error("Image bit count is not valid.");
+		}
+		_activeHeader = _v4InfoHeader;
+
 	}
 }
 
 void BMPImage::_readPixels(std::ifstream& file)
 {
-	// Calculate the number of bytes per row
-	int bytesPerRow = ((_infoHeader.width * _infoHeader.bitCount + 31) / 32) * 4;
-
 	// Pixel data
-	for (int i = 0; i < _infoHeader.height; i++)
+	for (int i = 0; i < _activeHeader.height; i++)
 	{
-		for (int j = 0; j < _infoHeader.width; j++)
+		for (int j = 0; j < _activeHeader.width; j++)
 		{
 			std::uint16_t pixelSize = _getByteCount();
 			auto pixel_ptr = std::make_unique<uint8_t[]>(pixelSize);
@@ -174,80 +212,46 @@ void BMPImage::_readPixels(std::ifstream& file)
 
 void BMPImage::_writeHeaders(std::ofstream& file) const
 {
-	//Write the file header
-	file.write(reinterpret_cast<const char*>(&_fileHeader.fileType), sizeof(_fileHeader.fileType));
-	file.write(reinterpret_cast<const char*>(&_fileHeader.fileSize), sizeof(_fileHeader.fileSize));
-	file.write(reinterpret_cast<const char*>(&_fileHeader.reserved1), sizeof(_fileHeader.reserved1));
-	file.write(reinterpret_cast<const char*>(&_fileHeader.reserved2), sizeof(_fileHeader.reserved2));
-	file.write(reinterpret_cast<const char*>(&_fileHeader.offsetData), sizeof(_fileHeader.offsetData));
+	file.write(reinterpret_cast<const char*>(&_fileHeader), sizeof(_fileHeader));
 
-	file.write(reinterpret_cast<const char*>(&_infoHeader.size), sizeof(_infoHeader.size));
-	file.write(reinterpret_cast<const char*>(&_infoHeader.width), sizeof(_infoHeader.width));
-	file.write(reinterpret_cast<const char*>(&_infoHeader.height), sizeof(_infoHeader.height));
-	file.write(reinterpret_cast<const char*>(&_infoHeader.planes), sizeof(_infoHeader.planes));
-	file.write(reinterpret_cast<const char*>(&_infoHeader.bitCount), sizeof(_infoHeader.bitCount));
-	file.write(reinterpret_cast<const char*>(&_infoHeader.compression), sizeof(_infoHeader.compression));
-	file.write(reinterpret_cast<const char*>(&_infoHeader.sizeImage), sizeof(_infoHeader.sizeImage));
-	file.write(reinterpret_cast<const char*>(&_infoHeader.xPixelsPerMeter), sizeof(_infoHeader.xPixelsPerMeter));
-	file.write(reinterpret_cast<const char*>(&_infoHeader.yPixelsPerMeter), sizeof(_infoHeader.yPixelsPerMeter));
-	file.write(reinterpret_cast<const char*>(&_infoHeader.colorsUsed), sizeof(_infoHeader.colorsUsed));
-	file.write(reinterpret_cast<const char*>(&_infoHeader.colorsImportant), sizeof(_infoHeader.colorsImportant));
-
-	// adding the color masks and color space type for deep color images
-	if (_infoHeader.bitCount == DEEP_COLOR_BIT_SIZE)
+	if (_isTrueColor())
 	{
-		uint32_t redMask = RED_CHANNEL_BIT_MASK;
-		uint32_t greenMask = GREEN_CHANNEL_BIT_MASK;
-		uint32_t blueMask = BLUE_CHANNEL_BIT_MASK;
-		uint32_t alphaMask = ALPHA_CHANNEL_BIT_MASK;
-		file.write(reinterpret_cast<const char*>(&redMask), sizeof(redMask));
-		file.write(reinterpret_cast<const char*>(&greenMask), sizeof(greenMask));
-		file.write(reinterpret_cast<const char*>(&blueMask), sizeof(blueMask));
-		file.write(reinterpret_cast<const char*>(&alphaMask), sizeof(alphaMask));
-
-		std::string colorSpace = "Win ";  // See https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/eb4bbd50-b3ce-4917-895c-be31f214797f
-        file.write(colorSpace.c_str(), colorSpace.size());
-
-		// See https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-ciexyztriple
-		uint32_t redEndPoints[3] = { 0, 0, 0 };
-		uint32_t greenEndPoints[3] = { 0, 0, 0 };
-		uint32_t blueEndPoints[3] = { 0, 0, 0 };
-		file.write(reinterpret_cast<const char*>(redEndPoints), sizeof(redEndPoints));
-		file.write(reinterpret_cast<const char*>(greenEndPoints), sizeof(greenEndPoints));
-		file.write(reinterpret_cast<const char*>(blueEndPoints), sizeof(blueEndPoints));
-
-		uint32_t redGamma = 0;
-		uint32_t greenGamma = 0;
-		uint32_t blueGamma = 0;
-		file.write(reinterpret_cast<const char*>(&redGamma), sizeof(redGamma));
-		file.write(reinterpret_cast<const char*>(&greenGamma), sizeof(greenGamma));
-		file.write(reinterpret_cast<const char*>(&blueGamma), sizeof(blueGamma));
-
+		file.write(reinterpret_cast<const char*>(&_infoHeader), sizeof(_infoHeader));
+	}
+	else if (_isDeepColor())
+	{
+		file.write(reinterpret_cast<const char*>(&_v4InfoHeader), sizeof(_v4InfoHeader));
+	}
+	else
+	{
+		throw std::runtime_error("Invalid bit count");
 	}
 }
+
 
 void BMPImage::_writePixels(std::ofstream& file) const
 {
 	// Write the pixel data
-	for (int i = 0; i < _infoHeader.height; i++)
+	for (int i = 0; i < _activeHeader.height; i++)
 	{
-		for (int j = 0; j < _infoHeader.width; j++)
+		for (int j = 0; j < _activeHeader.width; j++)
 		{
-			Pixel pixel = _pixelData[i * _infoHeader.width + j];
+			Pixel pixel = _pixelData[i * _activeHeader.width + j];
 			std::streamsize pixelSize = _getByteCount();
 			auto pixel_ptr = std::make_unique<uint8_t[]>(pixelSize);
 			pixel_ptr[0] = pixel.getRed();
 			pixel_ptr[1] = pixel.getGreen();
 			pixel_ptr[2] = pixel.getBlue();
-			if (_infoHeader.bitCount == DEEP_COLOR_BIT_SIZE)
+			if (_isDeepColor())
 			{
 				pixel_ptr[3] = pixel.getAlpha();
 			}
 			std::swap(pixel_ptr[0], pixel_ptr[2]); // Swap red and blue channels
 			file.write(reinterpret_cast<const char*>(pixel_ptr.get()), pixelSize);
 		}
+		
 		// Add padding if needed
-		int paddingSize = (4 - (_infoHeader.width * _getByteCount()) % 4) % 4;
+		int paddingSize = (4 - (_activeHeader.width * _getByteCount()) % 4) % 4;
 		uint8_t paddingData[4] = {0, 0, 0, 0};
 		file.write(reinterpret_cast<const char*>(paddingData), paddingSize);
 	}
@@ -255,36 +259,41 @@ void BMPImage::_writePixels(std::ofstream& file) const
 
 void BMPImage::_updateHeaders()
 {
-	uint32_t headerSize = (_infoHeader.bitCount == DEEP_COLOR_BIT_SIZE) ? BM_V4_INFO_HEADER_SIZE : BM_INFO_HEADER_SIZE;
-	_infoHeader.sizeImage = _infoHeader.width * _infoHeader.height * _getByteCount();
-	_fileHeader.fileSize = BM_FILE_HEADER_SIZE + headerSize + _infoHeader.sizeImage;
-	_fileHeader.offsetData = BM_FILE_HEADER_SIZE + headerSize;
+	_activeHeader.sizeImage = _activeHeader.width * _activeHeader.height * _getByteCount();
+	_fileHeader.fileSize = BM_FILE_HEADER_SIZE + BM_INFO_HEADER_SIZE + _activeHeader.sizeImage;
+	_fileHeader.offsetData = BM_FILE_HEADER_SIZE + BM_INFO_HEADER_SIZE;
+
 }
 
 void BMPImage::_resizePixelsData(int32_t newWidth, int32_t newHeight)
 {
 	std::vector<Pixel> newPixelData(newHeight * newWidth);
-	const int32_t minHeight = std::min(_infoHeader.height, newHeight);
-	const int32_t minWidth = std::min(_infoHeader.width, newWidth);
-	const int32_t maxHeight = std::max(_infoHeader.height, newHeight);
-	const int32_t maxWidth = std::max(_infoHeader.width, newWidth);
 
-	for (int i = 0; i < maxHeight; i++)
 	{
-		for (int j = 0; j < maxWidth; j++)
+		const int32_t minHeight = std::min(_activeHeader.height, newHeight);
+		const int32_t minWidth = std::min(_activeHeader.width, newWidth);
+		const int32_t maxHeight = std::max(_activeHeader.height, newHeight);
+		const int32_t maxWidth = std::max(_activeHeader.width, newWidth);
+		for (int i = 0; i < maxHeight; i++)
 		{
-			if (i < minHeight && j < minWidth)
+			for (int j = 0; j < maxWidth; j++)
 			{
-				newPixelData[i * newWidth + j] = _pixelData[i * _infoHeader.width + j];
+				if (i < minHeight && j < minWidth)
+				{
+					newPixelData[i * newWidth + j] = _pixelData[i * _activeHeader.width + j];
+				}
 			}
 		}
+		// update the headers
+		_activeHeader.height = newHeight;
+		_activeHeader.width = newWidth;
+		// resize the pixel data
+		_pixelData.resize(newHeight * newWidth);
+		// copy the data of the new pixel data to the pixel data
+		Pixel* newPixelDataPtr = newPixelData.data();
+		std::copy(newPixelDataPtr, newPixelDataPtr + newHeight * newWidth, _pixelData.data());
 	}
 
-	// update the headers
-	_infoHeader.height = newHeight;
-	_infoHeader.width = newWidth;
-	// resize the pixel data
-	_pixelData.resize(newHeight * newWidth);
 	// copy the data of the new pixel data to the pixel data
 	Pixel* newPixelDataPtr = newPixelData.data();
 	std::copy(newPixelDataPtr, newPixelDataPtr + newHeight * newWidth, _pixelData.data());
@@ -359,17 +368,14 @@ void BMPImage::save(const char* filename) const
 
 }
 
-
-
-
 uint32_t BMPImage::getWidth() const
 {
-	return _infoHeader.width;
+	return _activeHeader.width;
 }
 
 uint32_t BMPImage::getHeight() const
 {
-	return _infoHeader.height;
+	return _activeHeader.height;
 }
 
 /// <summary>
@@ -380,11 +386,11 @@ uint32_t BMPImage::getHeight() const
 /// <returns></returns>
 Pixel BMPImage::getPixel(const uint16_t x, const uint16_t y) const
 {
-	if (x >= _infoHeader.width || y >= _infoHeader.height)
+	if (x >= _activeHeader.width || y >= _activeHeader.height)
 	{
 		throw std::out_of_range("Pixel coordinates are out of bounds");
 	}
-	Pixel pixel = _pixelData[y * _infoHeader.width + x];
+	Pixel pixel = _pixelData[y * _activeHeader.width + x];
 	return pixel;
 }
 
@@ -398,17 +404,17 @@ Pixel BMPImage::getPixel(const uint16_t x, const uint16_t y) const
 /// <param name="b"></param>
 void BMPImage::setPixel(const uint16_t x,const uint16_t y, const uint8_t r, const uint8_t g, const  uint8_t b, const uint8_t a)
 {
-	if (x >= _infoHeader.width || y >= _infoHeader.height)
+	if (x >= _activeHeader.width || y >= _activeHeader.height)
 		throw std::out_of_range("Pixel coordinates are out of bounds");
-	if (_infoHeader.bitCount == DEEP_COLOR_BIT_SIZE)
+	if (_activeHeader.bitCount == DEEP_COLOR_BIT_SIZE)
 	{
-		_pixelData[y * _infoHeader.width + x] = Pixel(r, g, b, a);
+		_pixelData[y * _activeHeader.width + x] = Pixel(r, g, b, a);
 	}
 
-	else if (_infoHeader.bitCount == TRUE_COLOR_BIT_SIZE)
+	else if (_activeHeader.bitCount == TRUE_COLOR_BIT_SIZE)
 	{
 		if (a != 0) std::cout << "Pixel " << x << ", " << y << " : The image do not have alpha channel component.\n";
-		_pixelData[y * _infoHeader.width + x] = Pixel(r, g, b);
+		_pixelData[y * _activeHeader.width + x] = Pixel(r, g, b);
 	}
 }
 
@@ -420,7 +426,7 @@ void BMPImage::setPixel(const uint16_t x,const uint16_t y, const uint8_t r, cons
 /// <param name="pixel"></param>
 void BMPImage::setPixel(uint16_t x, uint16_t y, const Pixel& pixel)
 {
-	_pixelData[y * _infoHeader.width + x] = pixel;
+	_pixelData[y * _activeHeader.width + x] = pixel;
 }
 
 /// <summary>
@@ -432,7 +438,7 @@ void BMPImage::resize(const int32_t newWidth, const int32_t newHeight)
 {
 	if (newHeight > 0 && newWidth > 0)
 	{
-		if (_infoHeader.height != newHeight || _infoHeader.width != newWidth)
+		if (_activeHeader.height != newHeight || _activeHeader.width != newWidth)
 		{
 			_resizePixelsData(newWidth, newHeight);
 			std::cout << "Image resized successfully" << std::endl;
@@ -454,7 +460,7 @@ void BMPImage::resize(const int32_t newWidth, const int32_t newHeight)
 /// <param name="height"></param>
 void BMPImage::setHeight(const int32_t height)
 {
-	resize(height, _infoHeader.width);
+	resize(height, _activeHeader.width);
 }
 
 
@@ -464,7 +470,7 @@ void BMPImage::setHeight(const int32_t height)
 /// <param name="width"></param>
 void BMPImage::setWidth(int32_t width)
 {
-	resize(_infoHeader.height, width);
+	resize(_activeHeader.height, width);
 }
 
 /// <summary>
@@ -474,8 +480,8 @@ void BMPImage::setWidth(int32_t width)
 /// <param name="yPixelsPerMeter"></param>
 void BMPImage::getResolution(int32_t& xPixelsPerMeter, int32_t& yPixelsPerMeter) const
 {
-	xPixelsPerMeter = _infoHeader.xPixelsPerMeter;
-	yPixelsPerMeter = _infoHeader.yPixelsPerMeter;
+	xPixelsPerMeter = _activeHeader.xPixelsPerMeter;
+	yPixelsPerMeter = _activeHeader.yPixelsPerMeter;
 }
 
 /// <summary>
@@ -485,8 +491,8 @@ void BMPImage::getResolution(int32_t& xPixelsPerMeter, int32_t& yPixelsPerMeter)
 /// <param name="yPixelsPerMeter"></param>
 void BMPImage::setResolution(const int32_t xPixelsPerMeter,const int32_t yPixelsPerMeter)
 {
-	_infoHeader.xPixelsPerMeter = xPixelsPerMeter;
-	_infoHeader.yPixelsPerMeter = yPixelsPerMeter;
+	_activeHeader.xPixelsPerMeter = xPixelsPerMeter;
+	_activeHeader.yPixelsPerMeter = yPixelsPerMeter;
 }
 
 /// <summary>
@@ -519,8 +525,8 @@ void BMPImage::multiplySize(float factor)
 	}
 
 
-    const int32_t newWidth = static_cast<int32_t>(_infoHeader.width * factor);
-    const int32_t newHeight = static_cast<int32_t>(_infoHeader.height * factor);
+    const int32_t newWidth = static_cast<int32_t>(_activeHeader.width * factor);
+    const int32_t newHeight = static_cast<int32_t>(_activeHeader.height * factor);
 
     std::vector<Pixel> newPixelData(newHeight * newWidth);
 
@@ -532,8 +538,8 @@ void BMPImage::multiplySize(float factor)
 			int32_t oldY;
 			if (reverse == 1)
 			{
-				oldX = static_cast<int32_t>( _infoHeader.width - (x / factor));
-				oldY = static_cast<int32_t>( _infoHeader.height - (y / factor));
+				oldX = static_cast<int32_t>( _activeHeader.width - (x / factor));
+				oldY = static_cast<int32_t>( _activeHeader.height - (y / factor));
 
 			}
 			else
@@ -541,15 +547,15 @@ void BMPImage::multiplySize(float factor)
 				oldX = static_cast<int32_t>(x / factor);
 				oldY = static_cast<int32_t>(y / factor);
 			}
-            if (oldX < _infoHeader.width && oldY < _infoHeader.height)
+            if (oldX < _activeHeader.width && oldY < _activeHeader.height)
             {
-                newPixelData[y * newWidth + x] = _pixelData[oldY * _infoHeader.width + oldX];
+                newPixelData[y * newWidth + x] = _pixelData[oldY * _activeHeader.width + oldX];
             }
         }
     }
 
-    _infoHeader.width = newWidth;
-    _infoHeader.height = newHeight;
+    _activeHeader.width = newWidth;
+    _activeHeader.height = newHeight;
     _pixelData = std::move(newPixelData);
 
     _updateHeaders();
@@ -561,15 +567,57 @@ void BMPImage::multiplySize(float factor)
 	}
 }
 
+/// <summary>
+/// Generate mandelbrot fractal
+/// </summary>
+BMPImage BMPImage::Fractal::mandelbrot(const int32_t width, const int32_t height, const int16_t iterations)
+{
+    // Mandelbrot fractal
+    const float aspectRatio = static_cast<float>(width) / height;
+    const float scale = 3.5f / std::min(width, height); // scale factor to fit the fractal within the image dimensions
+    // offset to center the fractal on the image
+    const float offsetX = -2.5f * aspectRatio;
+    constexpr float offsetY = -1.75f;
+	BMPImage image(width, height, TRUE_COLOR_BIT_SIZE);
+	for (int32_t y = 0; y < height; ++y)
+	{
+		for (int32_t x = 0; x < width; ++x)
+		{
+			float zx = 0;
+			float zy = 0;
+			const float cx = (x * scale / aspectRatio) + offsetX;
+			const float cy = y * scale + offsetY;
+			int16_t i = 0;
+			for (; i < iterations; ++i)
+			{
+				const float temp = zx * zx - zy * zy + cx;
+				zy = 2 * zx * zy + cy;
+				zx = temp;
+				if (zx * zx + zy * zy > 4)
+				{
+					break;
+				}
+			}
+			const uint8_t r = static_cast<uint8_t>(255 * i / iterations);
+			const uint8_t g = static_cast<uint8_t>(255 * i / iterations);
+			const uint8_t b = static_cast<uint8_t>(255 * i / iterations);
+			image.setPixel(x, y, r, g, b);
+		}
+	}
+	std::cout << "Mandelbrot fractal generated successfully" << std::endl;
+	return image;
+}
+
+
 std::ostream& operator<<(std::ostream& os, const BMPImage& image)
 {
 	os << "Image informations : " << std::endl;
 	os << " - File size: " << image._fileHeader.fileSize << " bytes" << std::endl;
 
-	os << " - Width: " << image._infoHeader.width << std::endl;
-	os << " - Height: " << image._infoHeader.height << std::endl;
+	os << " - Width: " << image._activeHeader.width << std::endl;
+	os << " - Height: " << image._activeHeader.height << std::endl;
 
-	os << " - Bit count: " << image._infoHeader.bitCount << std::endl;
+	os << " - Bit count: " << image._activeHeader.bitCount << std::endl;
 
 	return os;
 }

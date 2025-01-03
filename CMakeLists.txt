@@ -11,11 +11,15 @@ set(SRC_DIR ${CMAKE_SOURCE_DIR}/Src)
 file(GLOB SOURCES ${SRC_DIR}/*.cpp)
 include_directories(${SRC_DIR})
 
-# Copy Images directory to build folder
-file(COPY ${CMAKE_SOURCE_DIR}/Images DESTINATION ${CMAKE_BINARY_DIR})
-
 # Add executable
 add_executable(${PROJECT_NAME} ${SOURCES})
+
+# Reset Images directory in build folder
+add_custom_command(
+    TARGET ${PROJECT_NAME} PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/Images
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Images ${CMAKE_BINARY_DIR}/Images
+)
 
 # Platform-specific settings (optional)
 if(WIN32)
@@ -28,4 +32,3 @@ elseif(UNIX)
     message("Configuring for Linux")
     target_compile_definitions(${PROJECT_NAME} PRIVATE PLATFORM_LINUX)
 endif()
-
