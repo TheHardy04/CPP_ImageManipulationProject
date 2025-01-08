@@ -50,7 +50,7 @@ make
 ```
 5. Run the project:
 ```bash
-./ImageManipulation
+./ImageProject
 ```
 
 Then follow the instructions in the console. It it designed to be user-friendly.
