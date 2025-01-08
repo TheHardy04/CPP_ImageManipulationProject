@@ -12,6 +12,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <filesystem>
+#include <cstdio>
 namespace fs = std::filesystem;
 #define CLEAR_SCREEN "clear"
 #endif
@@ -32,6 +33,12 @@ namespace
     \:\__\                                            \/__/         /:/  /        /:/  /       \::/  /       \:\__\             
      \/__/                                                          \/__/         \/__/         \/__/         \/__/             
     )" << "\n";
+	}
+
+    void waitForKey()
+	{
+		std::cout << "Press enter to continue...";
+		std::cin.get();
 	}
 
 #if not defined(_WIN32)
@@ -124,12 +131,6 @@ namespace
 
         return current;
     }
-    
-    void waitForKey()
-	{
-		std::cout << "Press enter to continue...";
-		std::cin.get();
-	}
 
     std::vector<std::string> getFilesInDirectory(const std::string& directoryPath, std::string extension = "") {
         std::vector<std::string> fileNames;
@@ -227,6 +228,7 @@ namespace
 	{
 		std::vector<std::string> options = {
             "What to do ?",
+            "Open Image",
 			"Apply a factor to the size",
 			"Manual Resize",
 			"Save",
@@ -285,6 +287,10 @@ namespace
 		std::cin >> width;
 		std::cout << "Enter the height: \n";
 		std::cin >> height;
+#ifndef _WIN32
+        waitForKey();
+#endif
+        system(CLEAR_SCREEN);
         std::vector<std::string> options = {
             "Choose an option",
             "Do nothing",
@@ -292,7 +298,6 @@ namespace
         };
 		int choice = selectOption(options);
 		BMPImage image(width, height);
-
 		if (choice == 2)
 		{
             image = BMPImage::Fractal::mandelbrot(width,height,150);
