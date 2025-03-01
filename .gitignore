@@ -36,3 +36,5 @@
 /out
 /build
 
+# Visual Studio Code files
+.vscode

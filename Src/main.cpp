@@ -105,7 +105,6 @@ namespace
             system(CLEAR_SCREEN);
 			std::cout << options[0] << std::endl;
 			std::cout << "Select an option:" << std::endl;
-            std::cout << current << std::endl; 
             for (size_t i = 1; i < options.size(); ++i) {
                 if (i == current) {
                     std::cout << "> " << options[i] << " <" << std::endl;
